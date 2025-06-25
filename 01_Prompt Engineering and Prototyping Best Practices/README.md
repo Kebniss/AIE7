@@ -50,9 +50,31 @@ This "vibe check" now serves as a baseline, of sorts, to help understand what ho
 
 ##### 🚧 Advanced Build:
 
-Please make adjustments to your application that you believe will improve the vibe check done above, push the changes to your HF Space and redo the above vibe check.
+Please make adjustments to your application that you believe will improve the vibe check done above, then deploy the changes to your Vercel domain [(see these instructions from your Challenge project)](https://github.com/AI-Maker-Space/The-AI-Engineer-Challenge/blob/main/README.md) and redo the above vibe check.
 
 > NOTE: You may reach for improving the model, changing the prompt, or any other method.
+
+### Submitting Your Homework
+#### Activity #1 and Discussion Question #1 Only
+Follow these steps to prepare and submit your homework:
+1. Create a branch of your `AIE7` repo to track your changes. Example command: `git checkout -b s01-assignment`
+2. Create a markdown document (for example “ACTIVITIES.md”).
+3. Copy the questions into the document.
+4. For each question:
+    + Answer the “Aspect Tested” question
+    + Write up your evaluation of your system’s performance 
+5. Answer “Discussion Question #1” at the end of this document.
+6. Add, commit and push your new document to your origin repository.
+>(NOTE: You should not, merge the new document into origin’s main branch. This will spare you from update challenges for each session.)
+
+When submitting your homework, provide the GitHub link to the new document on the tracking branch you created.
+
+#### Activities, Discussion Questions _AND_ The Advanced Build:
+For Activity #1 and Discussion Question #1, follow the same steps as above _**using your Challenge project's repo.**_
+
+When submitting your homework provide the following on the form:
++ The GitHub URL to the markdown document you created in your Challenge project's repo.
++ The public Vercel URL to your updated Challenge project.
 
 ### A Note on Vibe Checking
 
