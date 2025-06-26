@@ -1,0 +1,15 @@
+## Vibe check 
+
+| Prompt | Aspect Tested | Evaluation (1–5) | Improvements |
+|--------|---------------|------------------|--------------|
+| Explain the concept of object-oriented programming in simple terms to a complete beginner. | Ability to understand the prompt: the audience is a beginner and therefore the explanation is expected to be concise, easy to comprehend and likely have a metaphor with something that is commonly understood by the larger population to help make the user understand the key concepts. | 4 | Text was well-written, but formatting issues were fixed manually after output. |
+| Read the following paragraph and provide a concise summary of the key points… | Capacity of the model to extract key information and re-write it so that it communicates just that. | 3 | Initially reduced by ~50%. After adding a system prompt to prioritize brevity and hiding the dev prompt, it achieved a 70% reduction. |
+| Write a short, imaginative story (100–150 words) about a robot finding friendship in an unexpected place. | Ability to generate text from an open-ended prompt and stick to the length requested. | 5 | No changes needed. Performed well and adhered to length. |
+| If a store sells apples in packs of 4 and oranges in packs of 3, how many packs of each do I need to buy to get exactly 12 apples and 9 oranges? | Verify the LLM's ability to use logic and mathematical rules to solve numerical problems. | 4 | Performed well, even on unsolvable variations. Identified impossibility correctly. Prompt was extended to include formula derivation for clarity. |
+| Rewrite the following paragraph in a professional, formal tone… | Ability to comprehend the text and change the tone of an input following the user’s request. | 5 | Output was excellent. Discovered that the input field lacked a scroll bar and needed resizing for long prompts. |
+
+
+## Discussion
+
+**What are some limitations of vibe checking as an evaluation tool?**
+Traditional unit and integration tests allow the user to check specific components or the overall behavior of an application. These tests are always **reproducible** while LLM vibe checks are not. While the LLM generally replies to the same prompt in a similar matter it can always hallucinate. Another difference with traditional testing is that the evaluation of the tests can be easily automated by checks, here we need humans to evaluate the response and some of this evaluation comes down to personal preference. This apprach is expensive if we want to evaluate a comprehensive set of prompts. Moreover this single shot interaction does not test how users actually use the product in real life: while there are users that follow best practices, there some that use one chat to ask multiple things, creating a weird history of context that can influence the LLM to hallucinate more.
