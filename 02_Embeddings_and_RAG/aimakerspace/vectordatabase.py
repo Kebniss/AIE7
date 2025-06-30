@@ -15,20 +15,20 @@ def cosine_similarity(vector_a: np.array, vector_b: np.array) -> float:
 
 class VectorDatabase:
     def __init__(self, embedding_model: EmbeddingModel = None):
-        self.vectors = defaultdict(np.array)
+        self.vectors = {}
         self.embedding_model = embedding_model or EmbeddingModel()
 
-    def insert(self, key: str, vector: np.array) -> None:
-        self.vectors[key] = vector
+    def insert(self, key: str, vector: np.array, metadata: dict = None) -> None:
+        self.vectors[key] = {"vector": vector, "metadata": metadata}
 
     def search(
         self,
         query_vector: np.array,
         k: int,
         distance_measure: Callable = cosine_similarity,
-    ) -> List[Tuple[str, float]]:
+    ) -> List[Tuple[str, float, dict]]:
         scores = [
-            (key, distance_measure(query_vector, vector))
+            (key, distance_measure(query_vector, vector["vector"]), vector["metadata"])
             for key, vector in self.vectors.items()
         ]
         return sorted(scores, key=lambda x: x[1], reverse=True)[:k]
@@ -42,15 +42,21 @@ class VectorDatabase:
     ) -> List[Tuple[str, float]]:
         query_vector = self.embedding_model.get_embedding(query_text)
         results = self.search(query_vector, k, distance_measure)
-        return [result[0] for result in results] if return_as_text else results
+        return [(result[0], result[1]) for result in results] if not return_as_text else [result[0] for result in results]
+    
+    def search_by_text_with_metadata(self, query_text: str, k: int, distance_measure: Callable = cosine_similarity) -> List[Tuple[str, float, dict]]:
+        query_vector = self.embedding_model.get_embedding(query_text)
+        results = self.search(query_vector, k, distance_measure)
+        return results
 
     def retrieve_from_key(self, key: str) -> np.array:
         return self.vectors.get(key, None)
 
     async def abuild_from_list(self, list_of_text: List[str]) -> "VectorDatabase":
         embeddings = await self.embedding_model.async_get_embeddings(list_of_text)
-        for text, embedding in zip(list_of_text, embeddings):
-            self.insert(text, np.array(embedding))
+        for index, (text, embedding) in enumerate(zip(list_of_text, embeddings)):
+            metadata = {"index": index, "length": len(text)}
+            self.insert(text, np.array(embedding), metadata)
         return self
 
 
