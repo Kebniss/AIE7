@@ -124,3 +124,42 @@ query = "What is the best way to learn about artificial intelligence?"
 **Benefits:**  
 - Improved retrieval accuracy by focusing on key terms.
 - More relevant search results for user queries.
+
+# Multi-Format Document Support
+
+**Description:**  
+The `TextFileLoader` class now supports loading and parsing multiple document formats, expanding its utility beyond plain text files.
+
+**Supported Formats:**
+- **TXT**: Plain text files
+- **PDF**: Extracts text from each page using `pdfplumber`
+- **DOCX**: Extracts text from Microsoft Word documents using `docx2txt`
+- **HTML**: Converts HTML content to plain text using `html2text`
+
+**How it works:**
+- When you provide a file path to `TextFileLoader`, it will automatically detect the file type and use the appropriate parser.
+- If you provide a directory, all `.txt` files in the directory (and subdirectories) will be loaded.
+
+**Example Usage:**
+```python
+from aimakerspace.text_utils import TextFileLoader
+
+# Load a TXT, PDF, DOCX, or HTML file
+loader = TextFileLoader("path/to/your/file.pdf")  # or .txt, .docx, .html
+loader.load()
+documents = loader.documents  # List of loaded text content
+```
+
+**Dependencies:**
+- `pdfplumber`
+- `docx2txt`
+- `html2text`
+- `nltk` (for text preprocessing)
+
+Install all dependencies with:
+```bash
+pip install pdfplumber docx2txt html2text nltk
+```
+
+**Note:**
+If you encounter issues with missing NLTK stopwords, the loader will attempt to download them automatically.

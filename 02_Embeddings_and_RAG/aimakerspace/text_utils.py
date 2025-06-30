@@ -3,6 +3,9 @@ import os
 from typing import List
 import nltk
 from nltk.corpus import stopwords
+import pdfplumber
+import docx2txt
+import html2text
 
 class TextFileLoader:
     def __init__(self, path: str, encoding: str = "utf-8"):
@@ -14,15 +17,38 @@ class TextFileLoader:
         if os.path.isdir(self.path):
             self.load_directory()
         elif os.path.isfile(self.path) and self.path.endswith(".txt"):
-            self.load_file()
+            self.load_txt_file()
+        elif os.path.isfile(self.path) and self.path.endswith(".pdf"):
+            self.load_pdf_file()
+        elif os.path.isfile(self.path) and self.path.endswith(".docx"):
+            self.load_docx_file()
+        elif os.path.isfile(self.path) and self.path.endswith(".html"):
+            self.load_html_file()
         else:
             raise ValueError(
                 "Provided path is neither a valid directory nor a .txt file."
             )
 
-    def load_file(self):
+    def load_txt_file(self):
         with open(self.path, "r", encoding=self.encoding) as f:
             self.documents.append(f.read())
+
+    def load_pdf_file(self):
+        with pdfplumber.open(self.path) as pdf:
+            text = ""
+            for page in pdf.pages:
+                text += page.extract_text() or ""
+            self.documents.append(text)
+
+    def load_docx_file(self):
+        text = docx2txt.process(self.path)
+        self.documents.append(text)
+
+    def load_html_file(self):
+        with open(self.path, "r", encoding=self.encoding) as f:
+            html_content = f.read()
+        text = html2text.html2text(html_content)
+        self.documents.append(text)
 
     def load_directory(self):
         for root, _, files in os.walk(self.path):
