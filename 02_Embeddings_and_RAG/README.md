@@ -72,7 +72,7 @@ Follow these steps to prepare and submit your homework:
 1. Create a branch of your `AIE7` repo to track your changes. Example command: `git checkout -b s02-assignment`
 2. Answering the questions in the `02_Embeddings_and_RAG/Pythonic_RAG_Assignment.ipynb`notebook:
     + Option 1: Provide your answers in a separate markdown document:
-      + Create a markdown document in the `02_Embeddings_and_RAG` folder of your assignment branch (for example “QUESTION_ANSWERS.md”):
+      + Create a markdown document in the `02_Embeddings_and_RAG` folder of your assignment branch (for example "QUESTION_ANSWERS.md"):
       + Copy the questions into the document
       + Answer the question.
     + Option 2: Answer the questions inline in the notebook:
@@ -86,10 +86,41 @@ Follow these steps to prepare and submit your homework:
     + At the end of the file is a Python code cell where you will enter the code to enhance the application
     + If you so desire, you can also implement some of the code in new `.py` files and `import` the functionality into that final code cell.
 4. Commit and push all of your changes to your origin repository.
->(REMINDER: You should not merge the assignment branch into origin’s main branch. This will spare you from future challenges when you pull the new content for each session.)
+>(REMINDER: You should not merge the assignment branch into origin's main branch. This will spare you from future challenges when you pull the new content for each session.)
 
 When submitting your homework, provide the GitHub link to the `02_Embeddings_and_RAG` folder _**of your assignment branch**_. To get the correct link:
 + Go to the code page of your `AIE7` repo:
 + Change the branch dropdown from `main` to the name of the branch you created in Step 1 above.
 + Select the `02_Embeddings_and_RAG` folder
 + Copy the current URL from your browser and paste it into your Homework submission form.
+
+# Query Preprocessing
+
+**Description:**  
+Before embedding queries for vector search, the system now preprocesses the input text to improve retrieval accuracy. This includes:
+
+- **Stop Word Removal:**  
+  Common English stop words (such as "the", "is", "and", etc.) are automatically removed from queries using the NLTK stopwords corpus. This helps focus the search on the most meaningful terms.
+
+- **(Optional) Synonym Expansion:**  
+  Queries can be expanded with synonyms to improve recall. (Enable or customize as needed.)
+
+**How it works:**  
+When a query is submitted for search, it is first cleaned by removing stop words. The cleaned query is then embedded and used for similarity search in the vector database.
+
+**Dependencies:**  
+- [NLTK](https://www.nltk.org/) is required for stop word removal.  
+  The system will automatically check for and download the required NLTK stopwords corpus if it is not already present.
+
+**Example Usage:**
+```python
+# Example query before preprocessing:
+query = "What is the best way to learn about artificial intelligence?"
+
+# After preprocessing (stop words removed):
+# "best way learn artificial intelligence"
+```
+
+**Benefits:**  
+- Improved retrieval accuracy by focusing on key terms.
+- More relevant search results for user queries.

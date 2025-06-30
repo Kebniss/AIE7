@@ -3,6 +3,7 @@ from collections import defaultdict
 from typing import List, Tuple, Callable
 from aimakerspace.openai_utils.embedding import EmbeddingModel
 import asyncio
+from aimakerspace.text_utils import TextPreprocessor
 
 
 def cosine_similarity(vector_a: np.array, vector_b: np.array) -> float:
@@ -47,14 +48,14 @@ class VectorDatabase:
         distance_measure: Callable = cosine_similarity,
         return_as_text: bool = False,
     ) -> List[Tuple[str, float]]:
-        query_vector = self.embedding_model.get_embedding(query_text)
+        query_vector = self.embedding_model.get_embedding(TextPreprocessor(query_text).remove_stopwords())
         results = self.search(query_vector, k, distance_measure)
         return [(result[0], result[1]) for result in results] if not return_as_text else [result[0] for result in results]
     
-    def search_by_text_with_metadata(self, query_text: str, k: int, distance_measure: Callable = cosine_similarity) -> List[Tuple[str, float, dict]]:
-        query_vector = self.embedding_model.get_embedding(query_text)
+    def search_by_text_with_metadata(self, query_text: str, k: int, distance_measure: Callable = cosine_similarity, return_as_text: bool = False) -> List[Tuple[str, float, dict]]:
+        query_vector = self.embedding_model.get_embedding(TextPreprocessor(query_text).remove_stopwords())
         results = self.search(query_vector, k, distance_measure)
-        return results
+        return [(result[0], result[1], result[2]) for result in results] if not return_as_text else [result[0] for result in results]
 
     def retrieve_from_key(self, key: str) -> np.array:
         return self.vectors.get(key, None)

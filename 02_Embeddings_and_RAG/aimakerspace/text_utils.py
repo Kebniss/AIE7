@@ -1,6 +1,8 @@
+
 import os
 from typing import List
-
+import nltk
+from nltk.corpus import stopwords
 
 class TextFileLoader:
     def __init__(self, path: str, encoding: str = "utf-8"):
@@ -60,6 +62,26 @@ class CharacterTextSplitter:
         for text in texts:
             chunks.extend(self.split(text))
         return chunks
+
+class TextPreprocessor:
+    def __init__(self, text: str):
+        self.text = text
+        self.ensure_nltk_stopwords()
+        self.stopwords = set(stopwords.words('english'))
+
+    def ensure_nltk_stopwords(self):
+    try:
+        # Try to access the stopwords corpus
+        nltk.data.find('corpora/stopwords')
+    except LookupError:
+        # If not found, download it
+        nltk.download('stopwords', quiet=True)
+    
+    def remove_stopwords(self):
+        words = self.text.split()
+        filtered_words = [word for word in words if word.lower() not in self.stopwords]
+        return " ".join(filtered_words)
+    
 
 
 if __name__ == "__main__":
