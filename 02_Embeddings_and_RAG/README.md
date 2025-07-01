@@ -163,3 +163,38 @@ pip install pdfplumber docx2txt html2text nltk
 
 **Note:**
 If you encounter issues with missing NLTK stopwords, the loader will attempt to download them automatically.
+
+# Paragraph-Based Chunking
+
+**Description:**  
+The codebase now supports semantic chunking of documents by splitting at every single newline (\n), in addition to the original character-based chunking. This approach treats each line (separated by a single newline) as a paragraph, improving context retention and retrieval quality for downstream tasks like embeddings and RAG.
+
+**How it works:**  
+- The `ParagraphTextSplitter` class splits text at every single newline (\n), then groups these lines into chunks up to a specified character limit.
+- Line boundaries are preserved—no line is split in the middle.
+
+**Example Usage:**
+```python
+from aimakerspace.text_utils import TextFileLoader, ParagraphTextSplitter
+
+# Load your document(s)
+loader = TextFileLoader("path/to/your/file.txt")
+loader.load()
+
+# Split into line-based chunks (splitting at every single newline)
+splitter = ParagraphTextSplitter(chunk_size=1000)
+chunks = splitter.split_texts(loader.documents)
+
+print(f"Number of chunks: {len(chunks)}")
+print("First chunk preview:", chunks[0])
+```
+
+**Benefits:**  
+- Preserves context by keeping lines intact.
+- Improves retrieval quality for embedding and RAG pipelines.
+
+**When to use:**  
+- When you want to maintain the line structure of your documents.
+- For tasks where context and coherence are important.
+
+---
