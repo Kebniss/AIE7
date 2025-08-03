@@ -1,4 +1,5 @@
 import functools
+import time
 from langchain.agents import AgentExecutor, create_openai_functions_agent
 from langchain_cohere import CohereRerank
 from langchain_community.vectorstores import Qdrant
@@ -35,7 +36,7 @@ def create_agent(llm: ChatOpenAI, tools: list, system_prompt: str):
 
 def create_router(llm: ChatOpenAI, system_prompt, members):
     """An LLM-based router."""
-    options = ["FINISH"] + members
+    options = members
     
     tool_def = {
         "type": "function",
@@ -61,7 +62,7 @@ def create_router(llm: ChatOpenAI, system_prompt, members):
             (
                 "system",
                 "Given the conversation above, who should act next?"
-                " Or should we FINISH? Select one of: {options}",
+                "Select one of: {options}",
             ),
         ]
     ).partial(options=str(options), team_members=", ".join(members))
@@ -83,12 +84,20 @@ def create_search_agent_node():
 
 # Agent Nodes
 def retrieve_node(state: AgentState, retriever) -> AgentState:
-    retrieved_docs = retriever.invoke(state["messages"][-1].content)
+    print("--- Starting Retrieval Node ---")
+    question = state["messages"][-1].content
+    
+    print(f"Retrieving documents for question: {question}")
+    t1 = time.time()
+    retrieved_docs = retriever.invoke(question)
+    t2 = time.time()
+    print(f"--- Finished Retrieving Documents in {t2 - t1:.2f}s ---")
     
     context_message = "Retrieved context from documents:\\n"
     for i, doc in enumerate(retrieved_docs):
         context_message += f"\\n--- Document {i+1} ---\\n{doc.page_content}\\n"
     
+    print("--- Finished Retrieval Node ---")
     return {
         "messages": [
             HumanMessage(content="Retrieval agent responding:"),
@@ -97,7 +106,11 @@ def retrieve_node(state: AgentState, retriever) -> AgentState:
     }
 
 def search_agent_node(state: AgentState, agent, name: str) -> AgentState:
+    print(f"--- Starting {name} Node ---")
+    t1 = time.time()
     result = agent.invoke(state)
+    t2 = time.time()
+    print(f"--- Finished {name} Node in {t2 - t1:.2f}s ---")
     
     if isinstance(result, dict):
         output_text = result.get('output', str(result))
@@ -118,15 +131,13 @@ def search_agent_node(state: AgentState, agent, name: str) -> AgentState:
     }
 
 def writer_node(state: AgentState) -> AgentState:
-    """
-    The writer node. It takes the state, combines the context,
-    and generates the final answer.
-    """
+    print("--- Starting Writer Node ---")
     llm = ChatOpenAI(model="gpt-4o-mini", temperature=0)
     
     writer_prompt = ChatPromptTemplate.from_messages(
         [
-            ("system", "You are a writer. Use the provided context to answer the user's question clearly and accurately."),
+            ("system", "You are a writer. Use the provided context to answer the user's question clearly and accurately."
+             "If the context is not enough, return 'I am not able to help'."),
             ("user", "Question: {question}\\n\\nContext:\\n{context}")
         ]
     )
@@ -139,7 +150,10 @@ def writer_node(state: AgentState) -> AgentState:
             
     question = state["messages"][0].content
     
+    t1 = time.time()
     result = writer_chain.invoke({"question": question, "context": combined_context})
+    t2 = time.time()
+    print(f"--- Finished Writer Node in {t2 - t1:.2f}s ---")
     
     return {
         "messages": [
@@ -149,6 +163,7 @@ def writer_node(state: AgentState) -> AgentState:
     }
 
 def router_node(state: AgentState, members) -> AgentState:
+    print("--- Starting Router Node ---")
     llm = ChatOpenAI(model="gpt-4o-mini", temperature=0)
     
     router = create_router(
@@ -163,16 +178,24 @@ def router_node(state: AgentState, members) -> AgentState:
         members,
     )
     
+    t1 = time.time()
     result = router.invoke({"messages": state["messages"]})
+    t2 = time.time()
     
-    if result:
-        return {
-            **state, 
-            "next": result[0]["args"]["next"]
-        }
-    else:
-        # Handle the case where the router returns no decision
-        return {
-            **state,
-            "next": "FINISH"  # Or a default next step
-        }
+    # Default to "Search" if the router fails to make a decision
+    next_node = "Search"
+    if result and isinstance(result, list) and len(result) > 0:
+        try:
+            # The router should choose between "Search" and "Writer"
+            if result[0]["args"]["next"] in members:
+                next_node = result[0]["args"]["next"]
+            else:
+                # This case handles if the LLM hallucinates an invalid member
+                print(f"--- Router returned invalid member '{result[0]['args']['next']}', defaulting to Search. ---")
+        except (KeyError, TypeError, IndexError) as e:
+            print(f"--- Router failed to parse result, defaulting to Search. Error: {e} ---")
+
+    print(f"--- Router decision: {next_node} in {t2 - t1:.2f}s ---")
+    return {
+        "next": next_node
+    }

@@ -69,7 +69,6 @@ def create_graph():
         {
             "Search": "Search",
             "Writer": "Writer",
-            "FINISH": END
         },
     )
     graph.add_edge("Search", "Writer")
