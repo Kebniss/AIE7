@@ -116,8 +116,11 @@ export default function Home() {
           buffer += decoder.decode(value, { stream: true });
           console.log("buffer:", buffer);
 
-          // Extract all content from the buffer, ignoring SSE formatting
-          const allContent = buffer.replace(/data: /g, '').replace(/\n\n/g, '\n').trim();
+          // Extract all content from the buffer, preserving original formatting
+          const allContent = buffer
+            .replace(/data: /g, '')  // Remove SSE data: prefix
+            .replace(/\n\n$/, '')    // Remove trailing double newline only
+            .trim();
 
           if (allContent && allContent !== '[DONE]') {
             console.log("Extracted content from buffer:", allContent);
