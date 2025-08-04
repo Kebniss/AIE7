@@ -258,7 +258,7 @@ export default function Home() {
       <aside className={styles.sidebar}>
         <div className={styles.sidebarHeader}>
           <span className={styles.sidebarText}>🏠</span>
-          <span className={styles.sidebarTitle}>Advocate</span>
+          <span className={styles.sidebarTitle}>ManualAIze</span>
         </div>
         {/* API Key input is removed from the UI */}
         {/* <div className={styles.apiKeyContainer}>
