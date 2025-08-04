@@ -147,7 +147,7 @@ def writer_node(state: AgentState) -> AgentState:
             ("user", "Question: {question}\\n\\nContext:\\n{context}")
         ]
     )
-    writer_chain = writer_prompt | llm | StrOutputParser()
+    writer_chain = writer_prompt | llm
     
     combined_context = ""
     for msg in state["messages"]:
@@ -162,10 +162,16 @@ def writer_node(state: AgentState) -> AgentState:
     print(f"--- Writer node generated response: {result} ---")
     print(f"--- Finished Writer Node in {t2 - t1:.2f}s ---")
     
+    # Extract the content from the result
+    if hasattr(result, 'content'):
+        content = result.content
+    else:
+        content = str(result)
+    
     return {
         "messages": [
             HumanMessage(content="Writer agent responding:"),
-            AIMessage(content=result, name="Writer")
+            AIMessage(content=content, name="Writer")
         ]
     }
 

@@ -111,42 +111,38 @@ export default function Home() {
       while (!done) {
         const { value, done: doneReading } = await reader.read();
         done = doneReading;
+
         if (value) {
           buffer += decoder.decode(value, { stream: true });
+          console.log("buffer:", buffer);
 
-          // Process server-sent events
-          let eolIndex;
-          while ((eolIndex = buffer.indexOf("\n")) >= 0) {
-            const line = buffer.slice(0, eolIndex).trim();
-            buffer = buffer.slice(eolIndex + 1);
+          // Extract all content from the buffer, ignoring SSE formatting
+          const allContent = buffer.replace(/data: /g, '').replace(/\n\n/g, '\n').trim();
 
-            if (line.startsWith("data: ")) {
-              const content = line.substring(6).trim();
-              if (content) {
-                // Handle special markers
-                if (content === "[DONE]") {
-                  console.log("Stream completed");
-                  continue;
-                }
+          if (allContent && allContent !== '[DONE]') {
+            console.log("Extracted content from buffer:", allContent);
+            console.log("Content length:", allContent.length);
 
-                console.log("Received content:", content);
-                setMessages(msgs => {
-                  const newMessages = [...msgs];
-                  const lastMessageIndex = newMessages.length - 1;
+            setMessages(msgs => {
+              const newMessages = [...msgs];
+              const lastMessageIndex = newMessages.length - 1;
 
-                  // Ensure we are updating the assistant's placeholder message immutably
-                  if (lastMessageIndex >= 0 && newMessages[lastMessageIndex].role === "assistant") {
-                    newMessages[lastMessageIndex] = {
-                      ...newMessages[lastMessageIndex],
-                      content: newMessages[lastMessageIndex].content + content,
-                    };
-                  }
-                  return newMessages;
-                });
+              // Replace the assistant's message content with the complete response
+              if (lastMessageIndex >= 0 && newMessages[lastMessageIndex].role === "assistant") {
+                newMessages[lastMessageIndex] = {
+                  ...newMessages[lastMessageIndex],
+                  content: allContent,  // REPLACE instead of append
+                };
+                console.log("Updated message content length:", newMessages[lastMessageIndex].content.length);
               }
-            }
+              return newMessages;
+            });
           }
+
+          // Clear the buffer after processing
+          buffer = "";
         }
+
       }
     } catch (err: unknown) {
       if (err && typeof err === 'object' && 'message' in err && typeof err.message === 'string' && err.message.toLowerCase().includes("network")) {
@@ -355,7 +351,7 @@ export default function Home() {
             value={input}
             onChange={e => setInput(e.target.value)}
             onKeyDown={handleKeyDown}
-            placeholder="Welcome to Advocate! I am here to help with questions about building code and home maintenance. Ask me anything..."
+            placeholder="Welcome to ManualAIze! I am here to help you find the answers you need. Ask me anything..."
             className={styles.textarea}
             rows={5}
             style={{ maxHeight: '120px', minHeight: '40px', overflowY: 'auto' }}

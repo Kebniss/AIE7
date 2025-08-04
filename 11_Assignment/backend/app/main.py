@@ -43,8 +43,8 @@ async def stream_generator(graph, input_message: str):
         if "Writer" in chunk:
             delta = chunk["Writer"]["messages"][-1].content
             if delta:
-                # Yield each delta as a separate server-sent event
-                yield f"data: {delta}\\n\\n"
+                # Stream each delta as it arrives (like the reference app)
+                yield f"data: {delta}\n\n"
 
 @app.post("/invoke")
 async def invoke(request: InvokeRequest):

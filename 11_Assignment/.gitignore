@@ -209,3 +209,6 @@ temp/
 .Trashes
 ehthumbs.db
 Thumbs.db 
+
+# unwanted folders
+reference_code/
