@@ -1,5 +1,7 @@
+import logging
 import functools
 import time
+
 from langchain.agents import AgentExecutor, create_openai_functions_agent
 from langchain_cohere import CohereRerank
 from langchain_community.vectorstores import Qdrant
@@ -132,7 +134,11 @@ def search_agent_node(state: AgentState, agent, name: str) -> AgentState:
 
 def writer_node(state: AgentState) -> AgentState:
     print("--- Starting Writer Node ---")
-    llm = ChatOpenAI(model="gpt-4o-mini", temperature=0)
+    try:
+        llm = ChatOpenAI(model="gpt-4o-mini", temperature=0)
+    except Exception as e:
+        logging.error(f"Error creating ChatOpenAI in writer_node: {e}")
+        raise
     
     writer_prompt = ChatPromptTemplate.from_messages(
         [
@@ -153,6 +159,7 @@ def writer_node(state: AgentState) -> AgentState:
     t1 = time.time()
     result = writer_chain.invoke({"question": question, "context": combined_context})
     t2 = time.time()
+    print(f"--- Writer node generated response: {result} ---")
     print(f"--- Finished Writer Node in {t2 - t1:.2f}s ---")
     
     return {
@@ -164,7 +171,11 @@ def writer_node(state: AgentState) -> AgentState:
 
 def router_node(state: AgentState, members) -> AgentState:
     print("--- Starting Router Node ---")
-    llm = ChatOpenAI(model="gpt-4o-mini", temperature=0)
+    try:
+        llm = ChatOpenAI(model="gpt-4o-mini", temperature=0)
+    except Exception as e:
+        logging.error(f"Error creating ChatOpenAI in router_node: {e}")
+        raise
     
     router = create_router(
         llm,

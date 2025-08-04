@@ -8,20 +8,20 @@ import rehypeKatex from "rehype-katex";
 
 export default function Home() {
   const [input, setInput] = useState("");
-  const [apiKey, setApiKey] = useState("");
+  // const [apiKey, setApiKey] = useState(""); // We'll manage API keys in the backend
   const [messages, setMessages] = useState<{ role: string; content: string }[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const chatEndRef = useRef<HTMLDivElement>(null);
 
-  // State for file upload menu
-  const [fileMenuOpen, setFileMenuOpen] = useState(false);
+  // State for file upload menu - temporarily disabled
+  // const [fileMenuOpen, setFileMenuOpen] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
-  const [uploadedFileName, setUploadedFileName] = useState<string>("");
-  // Upload status for feedback
-  const [uploadStatus, setUploadStatus] = useState<string>("");
-  // Track if a PDF has been uploaded successfully
-  const [pdfUploaded, setPdfUploaded] = useState<boolean>(false);
+  // const [uploadedFileName, setUploadedFileName] = useState<string>("");
+  // Upload status for feedback - temporarily disabled
+  // const [uploadStatus, setUploadStatus] = useState<string>("");
+  // Track if a PDF has been uploaded successfully - temporarily disabled
+  // const [pdfUploaded, setPdfUploaded] = useState<boolean>(false);
 
   // Scroll to bottom on new message
   useEffect(() => {
@@ -32,11 +32,7 @@ export default function Home() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError("");
-    if (!input.trim() || !apiKey.trim()) {
-      if (!apiKey.trim()) {
-        setError("Please enter your OpenAI API key before submitting.");
-        return;
-      }
+    if (!input.trim()) {
       setError("Please fill in all fields before submitting.");
       return;
     }
@@ -48,31 +44,13 @@ export default function Home() {
     setInput("");
     setLoading(true);
     try {
-      const isLocal = typeof window !== "undefined" && window.location.hostname === "localhost";
+      // API URL now points to our new backend invoke endpoint
+      const apiUrl = "http://localhost:8000/invoke";
 
-      // Use PDF chat endpoint if a PDF has been uploaded, otherwise use regular chat
-      const apiUrl = isLocal
-        ? (pdfUploaded
-          ? "http://localhost:8000/api/chat-pdf"
-          : "http://localhost:8000/api/chat-messages")
-        : (pdfUploaded
-          ? "/api/chat-pdf"
-          : "/api/chat-messages");
-
-      const requestBody = pdfUploaded
-        ? {
-          query: input,
-          api_key: apiKey,
-          model: "gpt-4.1-mini",
-          top_k: 3
-        }
-        : {
-          model: "gpt-4.1-mini",
-          api_key: apiKey,
-          messages: [
-            ...newMessages.map(m => ({ role: m.role, content: m.content }))
-          ]
-        };
+      // The request body is simplified to match the backend schema
+      const requestBody = {
+        input: input,
+      };
 
       const res = await fetch(apiUrl, {
         method: "POST",
@@ -81,6 +59,7 @@ export default function Home() {
         },
         body: JSON.stringify(requestBody),
       });
+
       if (!res.ok || !res.body) {
         const errorMsg = `API error: ${res.status}`;
         let errorDetail = "";
@@ -100,7 +79,7 @@ export default function Home() {
             break;
           case 401:
           case 403:
-            setError("Error: Invalid or unauthorized OpenAI API key.\nInstruction: Please check your API key and try again. You can find your key in your OpenAI account.");
+            setError("Error: Authorization failed.\nInstruction: Please check your backend configuration. You may be missing an API key.");
             break;
           case 404:
             setError("Requested resource or model not found.\nInstruction: Please check the model name or contact support if the issue persists.");
@@ -108,54 +87,70 @@ export default function Home() {
           case 422:
             setError(`Missing or invalid input.\nInstruction: ${errorDetail || "Please fill in all required fields correctly."}`);
             break;
-          case 429:
-            setError("Rate limit exceeded.\nInstruction: You have reached your usage limit or are sending requests too quickly. Please wait and try again later.");
-            break;
           case 500:
             setError("Server error.\nInstruction: The server is currently unavailable. Please try again later or contact support if the issue persists.");
             break;
           default:
-            if (errorDetail && errorDetail.toLowerCase().includes("invalid api key")) {
-              setError("Error: Invalid or unauthorized OpenAI API key.\nInstruction: Please check your API key and try again. You can find your key in your OpenAI account.");
-            } else {
-              setError(`Error: ${errorMsg}${errorDetail ? `\nDetails: ${errorDetail}` : ""}\nInstruction: An unexpected error occurred. Please try again or contact support.`);
-            }
+            setError(`Error: ${errorMsg}${errorDetail ? `\nDetails: ${errorDetail}` : ""}\nInstruction: An unexpected error occurred. Please try again or contact support.`);
         }
         setLoading(false);
         return;
       }
-      // Stream the response
+
+      // Stream the response from our backend
       const reader = res.body.getReader();
       const decoder = new TextDecoder();
       let done = false;
-      let fullText = "";
+      let buffer = "";
+
       setMessages(msgs => [
         ...msgs,
         { role: "assistant", content: "" }
       ]);
+
       while (!done) {
         const { value, done: doneReading } = await reader.read();
         done = doneReading;
         if (value) {
-          const chunk = decoder.decode(value, { stream: true });
-          fullText += chunk;
-          setMessages(msgs => {
-            // Update the last assistant message
-            const updated = [...msgs];
-            // Find the last assistant message
-            for (let i = updated.length - 1; i >= 0; i--) {
-              if (updated[i].role === "assistant") {
-                updated[i] = { ...updated[i], content: fullText };
-                break;
+          buffer += decoder.decode(value, { stream: true });
+
+          // Process server-sent events
+          let eolIndex;
+          while ((eolIndex = buffer.indexOf("\n")) >= 0) {
+            const line = buffer.slice(0, eolIndex).trim();
+            buffer = buffer.slice(eolIndex + 1);
+
+            if (line.startsWith("data: ")) {
+              const content = line.substring(6).trim();
+              if (content) {
+                // Handle special markers
+                if (content === "[DONE]") {
+                  console.log("Stream completed");
+                  continue;
+                }
+
+                console.log("Received content:", content);
+                setMessages(msgs => {
+                  const newMessages = [...msgs];
+                  const lastMessageIndex = newMessages.length - 1;
+
+                  // Ensure we are updating the assistant's placeholder message immutably
+                  if (lastMessageIndex >= 0 && newMessages[lastMessageIndex].role === "assistant") {
+                    newMessages[lastMessageIndex] = {
+                      ...newMessages[lastMessageIndex],
+                      content: newMessages[lastMessageIndex].content + content,
+                    };
+                  }
+                  return newMessages;
+                });
               }
             }
-            return updated;
-          });
+          }
         }
       }
     } catch (err: unknown) {
       if (err && typeof err === 'object' && 'message' in err && typeof err.message === 'string' && err.message.toLowerCase().includes("network")) {
-        setError("Error: Network error.\nInstruction: Please check your internet connection or your API key. If the problem persists, your API key may be invalid or your backend may be down.");
+        setError("Error: Network error.\nInstruction: Could not connect to the backend. Please ensure it is running and accessible.");
       } else {
         setError(`Error: ${err instanceof Error ? err.message : String(err)}\nInstruction: An unexpected error occurred. Please try again or contact support.`);
       }
@@ -186,122 +181,77 @@ export default function Home() {
     return text;
   }
 
-  // Handle PDF upload - currently unused but kept for future implementation
-  // const handlePdfUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
-  //   setPdfUploadStatus("");
-  //   if (!e.target.files || e.target.files.length === 0) return;
-  //   const file = e.target.files[0];
-  //   if (file.type !== "application/pdf") {
-  //     setPdfUploadStatus("Only PDF files are supported.");
-  //     return;
-  //   }
-  //   if (!apiKey.trim()) {
-  //     setPdfUploadStatus("Please enter your OpenAI API key before uploading a PDF.");
-  //     return;
-  //   }
-  //   setPdfUploadStatus("Uploading and indexing PDF...");
-  //   try {
-  //     const isLocal = typeof window !== "undefined" && window.location.hostname === "localhost";
-  //     const apiUrl = isLocal
-  //       ? "http://localhost:8000/api/upload-pdf"
-  //       : "/api/upload-pdf";
-  //     const formData = new FormData();
-  //     formData.append("file", file);
-  //     formData.append("api_key", apiKey);
-  //     const res = await fetch(apiUrl, {
-  //       method: "POST",
-  //       body: formData,
-  //     });
-  //     if (!res.ok) {
-  //       const data = await res.json().catch(() => ({}));
-  //       let detail = data.detail;
-  //       if (Array.isArray(detail)) {
-  //         detail = detail.map(d => d.msg || JSON.stringify(d)).join(' | ');
-  //       } else if (detail && typeof detail === "object") {
-  //         detail = detail.msg || JSON.stringify(detail, null, 2);
+  // Handle PDF upload - currently disabled but kept for future implementation
+  // const handleFileInputChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+  //   if (e.target.files && e.target.files.length > 0) {
+  //     const file = e.target.files[0];
+  //     setUploadedFileName(file.name);
+  //     setUploadStatus("Uploading...");
+  //     // setFileMenuOpen(false);
+  //     try {
+  //       const isPdf = file.type === "application/pdf";
+  //       const isImage = [
+  //         "image/png",
+  //         "image/jpeg",
+  //         "image/heif",
+  //         "image/heic"
+  //       ].includes(file.type);
+  //       if (!isPdf && !isImage) {
+  //         setUploadStatus("Only PNG, JPEG, HEIF, HEIC images or PDF files are supported.");
+  //         return;
   //       }
-  //       setPdfUploadStatus(detail || `Upload failed: ${res.status}`);
-  //       return;
+  //       const apiUrl = isPdf
+  //         ? (typeof window !== "undefined" && window.location.hostname === "localhost"
+  //           ? "http://localhost:8000/api/upload-pdf"
+  //           : "/api/upload-pdf")
+  //         : (typeof window !== "undefined" && window.location.hostname === "localhost"
+  //           ? "http://localhost:8000/api/upload-file"
+  //           : "/api/upload-file");
+  //       const formData = new FormData();
+  //       formData.append("file", file);
+  //       // if (isPdf) {
+  //       //   formData.append("api_key", apiKey);
+  //       // }
+  //       const res = await fetch(apiUrl, {
+  //         method: "POST",
+  //         body: formData,
+  //       });
+  //       if (!res.ok) {
+  //         const data = await res.json().catch(() => ({}));
+  //         let detail = data.detail;
+  //         if (Array.isArray(detail)) {
+  //           detail = detail.map(d => d.msg || JSON.stringify(d)).join(' | ');
+  //         } else if (detail && typeof detail === "object") {
+  //           detail = detail.msg || JSON.stringify(detail, null, 2);
+  //         }
+  //         setUploadStatus(detail || `Upload failed: ${res.status}`);
+  //         return;
+  //       }
+  //       const data = await res.json();
+  //       setUploadStatus(`File uploaded!${isPdf && data.chunks_indexed ? ` Chunks: ${data.chunks_indexed}` : ""}`);
+  //       if (isPdf && data.chunks_indexed) {
+  //         // setPdfUploaded(true);
+  //       }
+  //     } catch (err) {
+  //       setUploadStatus(`Upload error: ${err instanceof Error ? err.message : String(err)}`);
   //     }
-  //     const data = await res.json();
-  //     setPdfUploadStatus(`PDF indexed! Chunks: ${data.chunks_indexed}`);
-  //     setPdfUploaded(true);
-  //   } catch (err) {
-  //     setPdfUploadStatus(`Upload error: ${err instanceof Error ? err.message : String(err)}`);
   //   }
   // };
-
-  // Handler for file input
-  const handleFileInputChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    if (e.target.files && e.target.files.length > 0) {
-      const file = e.target.files[0];
-      setUploadedFileName(file.name);
-      setUploadStatus("Uploading...");
-      setFileMenuOpen(false);
-      try {
-        const isPdf = file.type === "application/pdf";
-        const isImage = [
-          "image/png",
-          "image/jpeg",
-          "image/heif",
-          "image/heic"
-        ].includes(file.type);
-        if (!isPdf && !isImage) {
-          setUploadStatus("Only PNG, JPEG, HEIF, HEIC images or PDF files are supported.");
-          return;
-        }
-        const apiUrl = isPdf
-          ? (typeof window !== "undefined" && window.location.hostname === "localhost"
-            ? "http://localhost:8000/api/upload-pdf"
-            : "/api/upload-pdf")
-          : (typeof window !== "undefined" && window.location.hostname === "localhost"
-            ? "http://localhost:8000/api/upload-file"
-            : "/api/upload-file");
-        const formData = new FormData();
-        formData.append("file", file);
-        if (isPdf) {
-          formData.append("api_key", apiKey);
-        }
-        const res = await fetch(apiUrl, {
-          method: "POST",
-          body: formData,
-        });
-        if (!res.ok) {
-          const data = await res.json().catch(() => ({}));
-          let detail = data.detail;
-          if (Array.isArray(detail)) {
-            detail = detail.map(d => d.msg || JSON.stringify(d)).join(' | ');
-          } else if (detail && typeof detail === "object") {
-            detail = detail.msg || JSON.stringify(detail, null, 2);
-          }
-          setUploadStatus(detail || `Upload failed: ${res.status}`);
-          return;
-        }
-        const data = await res.json();
-        setUploadStatus(`File uploaded!${isPdf && data.chunks_indexed ? ` Chunks: ${data.chunks_indexed}` : ""}`);
-        if (isPdf && data.chunks_indexed) {
-          setPdfUploaded(true);
-        }
-      } catch (err) {
-        setUploadStatus(`Upload error: ${err instanceof Error ? err.message : String(err)}`);
-      }
-    }
-  };
 
   // Debug: Log fileInputRef after every render
   useEffect(() => {
     console.log('fileInputRef.current after render:', fileInputRef.current);
   });
 
-  // Handler for clicking outside the menu to close it
-  useEffect(() => {
-    if (!fileMenuOpen) return;
-    function handleClick() {
-      setFileMenuOpen(false);
-    }
-    document.addEventListener("mousedown", handleClick);
-    return () => document.removeEventListener("mousedown", handleClick);
-  }, [fileMenuOpen]);
+  // Handler for clicking outside the menu to close it - temporarily disabled
+  // useEffect(() => {
+  //   if (!fileMenuOpen) return;
+  //   function handleClick() {
+  //     setFileMenuOpen(false);
+  //   }
+  //   document.addEventListener("mousedown", handleClick);
+  //   return () => document.removeEventListener("mousedown", handleClick);
+  // }, [fileMenuOpen]);
 
   return (
     <div className={styles.page}>
@@ -311,7 +261,8 @@ export default function Home() {
           <span className={styles.sidebarText}>🏠</span>
           <span className={styles.sidebarTitle}>Advocate</span>
         </div>
-        <div className={styles.apiKeyContainer}>
+        {/* API Key input is removed from the UI */}
+        {/* <div className={styles.apiKeyContainer}>
           <label className={styles.label}>OpenAI API Key</label>
           <input
             type="password"
@@ -320,16 +271,16 @@ export default function Home() {
             className={styles.apiKeyInput}
             required
           />
-        </div>
+        </div> */}
         <button
           onClick={() => {
             setMessages([]);
             setInput("");
             setError("");
             setLoading(false);
-            setPdfUploaded(false);
-            setUploadedFileName("");
-            setUploadStatus("");
+            // setPdfUploaded(false);
+            // setUploadedFileName("");
+            // setUploadStatus("");
           }}
           className={styles.clearButton}
         >
@@ -376,8 +327,8 @@ export default function Home() {
         )}
 
         <form onSubmit={handleSubmit} className={styles.form} style={{ position: 'relative' }}>
-          {/* + Button triggers file picker directly */}
-          <div className={styles.plusMenuWrapper}>
+          {/* File upload (+) button is temporarily disabled */}
+          {/* <div className={styles.plusMenuWrapper}>
             <button
               type="button"
               className={styles.plusButton}
@@ -391,16 +342,15 @@ export default function Home() {
             >
               +
             </button>
-            {/* Hidden file input */}
             <input
               id="file-upload-debug"
               type="file"
               accept=".png,.jpeg,.jpg,.heif,.heic,application/pdf,image/png,image/jpeg,image/heif,image/heic"
               ref={fileInputRef}
               style={{ display: 'none' }}
-              onChange={handleFileInputChange}
+              // onChange={handleFileInputChange}
             />
-          </div>
+          </div> */}
           <textarea
             value={input}
             onChange={e => setInput(e.target.value)}
@@ -414,13 +364,13 @@ export default function Home() {
             {loading ? "..." : "Send"}
           </button>
         </form>
-        {/* Show uploaded file name if any */}
-        {(uploadedFileName || uploadStatus) && (
+        {/* Show uploaded file name if any - temporarily disabled */}
+        {/* {(uploadedFileName || uploadStatus) && (
           <div className={styles.uploadedFileName}>
             {uploadedFileName && `Selected: ${uploadedFileName}`}<br />
             {uploadStatus && uploadStatus}
           </div>
-        )}
+        )} */}
       </main>
     </div>
   );
