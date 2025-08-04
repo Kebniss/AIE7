@@ -1,6 +1,8 @@
 import logging
 import functools
 import time
+from typing import TypedDict, List, Annotated, Optional, Dict, Any
+import operator
 
 from langchain.agents import AgentExecutor, create_openai_functions_agent
 from langchain_cohere import CohereRerank
@@ -9,7 +11,7 @@ from langchain_core.output_parsers.openai_tools import JsonOutputToolsParser
 from langchain_core.prompts import ChatPromptTemplate, MessagesPlaceholder
 from langchain_openai import OpenAIEmbeddings
 from langchain.retrievers.contextual_compression import ContextualCompressionRetriever
-from langchain_core.messages import AIMessage, HumanMessage
+from langchain_core.messages import AIMessage, HumanMessage, BaseMessage
 from langchain_openai import ChatOpenAI
 from langchain_core.output_parsers import StrOutputParser
 
@@ -108,9 +110,23 @@ def retrieve_node(state: AgentState, retriever) -> AgentState:
     }
 
 def search_agent_node(state: AgentState, agent, name: str) -> AgentState:
-    print(f"--- Starting {name} Node ---")
+    iteration = state.get("iteration_count", 0)
+    print(f"=== ITERATION {iteration} - SEARCH NODE ===")
+    print(f"Previous context size: {len(state.get('search_context', []))}")
+    print(f"Total messages in state: {len(state['messages'])}")
+    
     t1 = time.time()
-    result = agent.invoke(state)
+    try:
+        result = agent.invoke(state)
+    except Exception as e:
+        logging.error(f"Search failed: {e}")
+        return {
+            "messages": [
+                HumanMessage(content=f"{name} agent responding:"),
+                AIMessage(content=f"Search failed: {str(e)}. Proceeding with available information.", name=name)
+            ],
+            "should_continue": False  # Stop on search failure
+        }
     t2 = time.time()
     print(f"--- Finished {name} Node in {t2 - t1:.2f}s ---")
     
@@ -125,11 +141,18 @@ def search_agent_node(state: AgentState, agent, name: str) -> AgentState:
     else:
         search_message = str(result)
     
+    print(f"=== SEARCH COMPLETE - Found {len(search_message)} results ===")
     return {
         "messages": [
             HumanMessage(content=f"{name} agent responding:"),
             AIMessage(content=search_message, name=name)
-        ]
+        ],
+        "search_context": state.get("search_context", []) + [search_message],
+        "debug_info": {
+            "iteration": iteration,
+            "search_results_count": len(search_message),
+            "context_size": len(search_message)
+        }
     }
 
 def writer_node(state: AgentState) -> AgentState:
@@ -140,11 +163,33 @@ def writer_node(state: AgentState) -> AgentState:
         logging.error(f"Error creating ChatOpenAI in writer_node: {e}")
         raise
     
+    # Determine information sources
+    has_manual_context = any(
+        isinstance(msg, AIMessage) and msg.name == "Retrieval" 
+        for msg in state["messages"]
+    )
+    has_search_context = any(
+        isinstance(msg, AIMessage) and msg.name == "Search" 
+        for msg in state["messages"]
+    )
+    
+    # Create source attribution message
+    source_info = ""
+    if has_manual_context and has_search_context:
+        source_info = "I found information from both the manuals and internet research."
+    elif has_manual_context:
+        source_info = "I found this information in the manuals."
+    elif has_search_context:
+        source_info = "I couldn't find the answer in the manuals, but I found this information on the internet."
+    else:
+        source_info = "I don't have enough information to answer your question."
+    
     writer_prompt = ChatPromptTemplate.from_messages(
         [
             ("system", "You are a writer. Use the provided context to answer the user's question clearly and accurately."
-             "If the context is not enough, return 'I am not able to help'."),
-            ("user", "Question: {question}\\n\\nContext:\\n{context}")
+             "If the context is not enough, return 'I am not able to help'."
+             "Always start your response with a brief statement about your information sources."),
+            ("user", "Question: {question}\\n\\nContext:\\n{context}\\n\\nSource Attribution: {source_info}")
         ]
     )
     writer_chain = writer_prompt | llm
@@ -157,7 +202,11 @@ def writer_node(state: AgentState) -> AgentState:
     question = state["messages"][0].content
     
     t1 = time.time()
-    result = writer_chain.invoke({"question": question, "context": combined_context})
+    result = writer_chain.invoke({
+        "question": question, 
+        "context": combined_context,
+        "source_info": source_info
+    })
     t2 = time.time()
     print(f"--- Writer node generated response: {result} ---")
     print(f"--- Finished Writer Node in {t2 - t1:.2f}s ---")
@@ -176,43 +225,55 @@ def writer_node(state: AgentState) -> AgentState:
     }
 
 def router_node(state: AgentState, members) -> AgentState:
-    print("--- Starting Router Node ---")
-    try:
-        llm = ChatOpenAI(model="gpt-4o-mini", temperature=0)
-    except Exception as e:
-        logging.error(f"Error creating ChatOpenAI in router_node: {e}")
-        raise
+    iteration = state.get("iteration_count", 0)
+    should_continue = state.get("should_continue", True)
     
-    router = create_router(
-        llm,
-        ("You are a supervisor tasked with managing a conversation between the"
-         " following workers:  Search, Writer. Given the following user request,"
-         " determine if the information is enough to answer the user query. If it is,"
-         " pass the context to Writer. If it is not, pass the query to Search."
-         " You should never ask Search to do anything beyond research."
-         " You should never ask Writer to do anything beyond writing the answer given"
-         " the context."),
-        members,
-    )
+    print(f"=== ROUTER DECISION - ITERATION {iteration} ===")
+    print(f"Should continue from writer: {should_continue}")
+    print(f"Current iteration: {iteration}")
     
-    t1 = time.time()
-    result = router.invoke({"messages": state["messages"]})
-    t2 = time.time()
+    # Force stop at iteration 3
+    if iteration >= 3:
+        print("=== MAX ITERATIONS REACHED (3) - STOPPING ===")
+        return {"next": "Writer"}
     
-    # Default to "Search" if the router fails to make a decision
-    next_node = "Search"
-    if result and isinstance(result, list) and len(result) > 0:
-        try:
-            # The router should choose between "Search" and "Writer"
-            if result[0]["args"]["next"] in members:
-                next_node = result[0]["args"]["next"]
-            else:
-                # This case handles if the LLM hallucinates an invalid member
-                print(f"--- Router returned invalid member '{result[0]['args']['next']}', defaulting to Search. ---")
-        except (KeyError, TypeError, IndexError) as e:
-            print(f"--- Router failed to parse result, defaulting to Search. Error: {e} ---")
+    # Check writer's assessment
+    if not should_continue:
+        print("=== WRITER ASSESSMENT: STOP - RESPONSE COMPLETE ===")
+        return {"next": "Writer"}
+    
+    print("=== CONTINUING TO SEARCH ===")
+    return {"next": "Search"}
 
-    print(f"--- Router decision: {next_node} in {t2 - t1:.2f}s ---")
-    return {
-        "next": next_node
-    }
+def manage_context(state: AgentState) -> AgentState:
+    """Manage context to prevent token overflow"""
+    search_context = state.get("search_context", [])
+    total_context_length = sum(len(ctx) for ctx in search_context)
+    
+    print(f"=== CONTEXT MANAGEMENT ===")
+    print(f"Total context length: {total_context_length} characters")
+    print(f"Number of search contexts: {len(search_context)}")
+    
+    # If context is getting too large, keep only recent searches
+    if total_context_length > 10000:  # Conservative limit
+        print("Context too large, keeping only recent searches")
+        search_context = search_context[-2:]  # Keep last 2 searches
+    
+    return {"search_context": search_context}
+
+def increment_iteration(state: AgentState) -> AgentState:
+    current_count = state.get("iteration_count", 0)
+    new_count = current_count + 1
+    print(f"=== INCREMENTING ITERATION: {current_count} -> {new_count} ===")
+    return {"iteration_count": new_count}
+
+def log_state_info(state: AgentState, node_name: str):
+    """Comprehensive state logging"""
+    print(f"\n=== {node_name} STATE INFO ===")
+    print(f"Iteration: {state.get('iteration_count', 0)}")
+    print(f"Messages count: {len(state['messages'])}")
+    print(f"Search contexts: {len(state.get('search_context', []))}")
+    print(f"Should continue: {state.get('should_continue', True)}")
+    if 'debug_info' in state:
+        print(f"Debug info: {state['debug_info']}")
+    print("=" * 50)
