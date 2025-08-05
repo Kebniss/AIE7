@@ -4,8 +4,6 @@
 
 ## Task 1
 
-## Task 1
-
 ### Problem
 Customers often lose or ignore physical product manuals, resulting in wasted time and difficulty when they need to troubleshoot a product issue.
 
