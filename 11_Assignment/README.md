@@ -4,6 +4,12 @@
 
 AI-powered application for manual processing and automation.
 
+## 📋 **Important: Challenge Information**
+
+**For all information relevant to the AIE7 challenge, including problem analysis, solution design, evaluation results, and technical implementation details, please refer to the [Certification Report](certification_report.md).**
+
+This README contains general project setup and development information.
+
 ## 📋 TLDR: Development Progress (development_v1.ipynb)
 
 ### 🎯 What Was Accomplished
