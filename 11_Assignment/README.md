@@ -2,6 +2,45 @@
 
 AI-powered application for manual processing and automation.
 
+## 📋 TLDR: Development Progress (development_v1.ipynb)
+
+### 🎯 What Was Accomplished
+
+**ManualAIze** is an AI agent system designed to parse and retrieve information from user manuals. The development notebook (`development_v1.ipynb`) successfully implemented:
+
+#### 🔧 **Core Agent Architecture**
+- **Multi-agent system** with specialized roles: Retrieval, Router, Search, and Writer
+- **LangGraph-based workflow** with conditional routing between agents
+- **PDF processing pipeline** using PyPDFLoader for fast document loading
+- **Vector storage** with Qdrant for semantic search capabilities
+
+#### 📊 **Retrieval Strategy Evaluation**
+Tested and compared three retrieval approaches:
+1. **Naive Retrieval** - Basic vector similarity search
+2. **Compression Retrieval** - Enhanced with Cohere reranking
+3. **Ensemble Retrieval** - Combined BM25 + compression strategies
+
+#### 🧪 **Performance Evaluation with RAGAS**
+- **Generated test dataset** from 100 PDF documents using RAGAS TestsetGenerator
+- **Evaluated 6 key metrics**: Context Recall, Faithfulness, Factual Correctness, Response Relevancy, Context Entity Recall, Noise Sensitivity
+- **Results comparison** across all three retrieval strategies
+
+#### 📝 **Key Findings**
+- **Ensemble retrieval** showed best factual correctness (+7.25% vs naive)
+- **Context entity recall** improved with ensemble approach (+5.26% vs naive)
+- **Faithfulness** maintained high scores across all strategies
+- **Answer relevancy** remained consistently high (>87% across all methods)
+
+#### 🛠️ **Technical Stack**
+- **LangChain** for agent orchestration
+- **OpenAI GPT-4** for LLM capabilities
+- **Cohere** for document reranking
+- **Qdrant** for vector storage
+- **RAGAS** for evaluation framework
+
+### 🚀 Next Steps
+The agent system is ready for integration with the web interface and can handle real-time queries about car manuals, car seats, and other technical documents.
+
 ## 🚀 Quick Start
 
 ### Prerequisites

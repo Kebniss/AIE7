@@ -45,7 +45,7 @@ export default function Home() {
     setLoading(true);
     try {
       // API URL now points to our new backend invoke endpoint
-      const apiUrl = "http://localhost:8000/invoke";
+      const apiUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
 
       // The request body is simplified to match the backend schema
       const requestBody = {
