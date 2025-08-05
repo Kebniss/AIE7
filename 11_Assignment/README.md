@@ -1,5 +1,7 @@
 # ManualAIze
 
+📹 **[Watch the Application Walkthrough](https://www.loom.com/share/38c8f65afaab4c23bd64406c248c7d13?sid=8e2f5036-dc34-47ad-9294-dbca44c13294)**
+
 AI-powered application for manual processing and automation.
 
 ## 📋 TLDR: Development Progress (development_v1.ipynb)
