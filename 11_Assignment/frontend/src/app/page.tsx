@@ -52,7 +52,7 @@ export default function Home() {
         input: input,
       };
 
-      const res = await fetch(apiUrl, {
+      const res = await fetch(`${apiUrl}/invoke`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
