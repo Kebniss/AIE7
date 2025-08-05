@@ -38,6 +38,108 @@ Tested and compared three retrieval approaches:
 - **Qdrant** for vector storage
 - **RAGAS** for evaluation framework
 
+## 🌐 Web Application Implementation
+
+### 🏗️ **Architecture Overview**
+
+The web application is built as a **full-stack system** with:
+- **Frontend**: Next.js 15 with React 19 and TypeScript
+- **Backend**: FastAPI with LangGraph agent orchestration
+- **Database**: Qdrant vector database for document storage
+- **Containerization**: Docker Compose for easy deployment
+
+### 🔧 **Backend Implementation (`/backend`)**
+
+#### **FastAPI Server** (`app/main.py`)
+- **Streaming responses** using Server-Sent Events (SSE)
+- **CORS middleware** configured for frontend communication
+- **Graph lifecycle management** with startup/shutdown handlers
+- **Error handling** with detailed HTTP status codes
+
+#### **Agent Graph Architecture** (`app/graph/`)
+- **State management** with `AgentState` for message flow
+- **Modular node system**:
+  - `retrieve_node`: Document retrieval with compression
+  - `router_node`: LLM-based routing between agents
+  - `search_node`: Internet search capabilities
+  - `writer_node`: Final answer generation
+- **Tool integration** with Tavily search API
+
+#### **Document Processing Pipeline**
+- **PDF loading** with PyPDFLoader for performance
+- **Text chunking** with RecursiveCharacterTextSplitter
+- **Vector embedding** using OpenAI text-embedding-3-small
+- **Persistent storage** in Qdrant with collection management
+
+### 🎨 **Frontend Implementation (`/frontend`)**
+
+#### **Next.js Application** (`src/app/`)
+- **Modern React 19** with TypeScript for type safety
+- **Real-time chat interface** with streaming responses
+- **Markdown rendering** with mathematical notation support (KaTeX)
+- **Responsive design** with CSS modules
+
+#### **Key Features**
+- **Streaming chat** with Server-Sent Events integration
+- **Error handling** with detailed user feedback
+- **Mathematical notation** rendering with LaTeX support
+- **Auto-scrolling** chat interface
+- **Loading states** and progress indicators
+
+#### **UI Components**
+- **Sidebar** with system information and controls
+- **Chat container** with message history
+- **Input form** with textarea and send button
+- **Error display** with actionable instructions
+
+### 🐳 **Deployment & Infrastructure**
+
+#### **Docker Configuration**
+- **Multi-service setup** with docker-compose.yml
+- **Qdrant database** container for vector storage
+- **Backend service** with Python 3.11 and Poetry
+- **Frontend service** with Node.js 18 and Next.js
+
+#### **Service Communication**
+- **Backend API** exposed on port 8000
+- **Frontend dev server** on port 3002
+- **Qdrant database** on ports 6333/6334
+- **Internal networking** with Docker bridge
+
+### 🔄 **Data Flow**
+
+1. **User Input** → Frontend chat interface
+2. **API Request** → Backend `/invoke` endpoint
+3. **Agent Processing** → LangGraph workflow execution
+4. **Streaming Response** → Real-time SSE updates
+5. **UI Update** → Markdown rendering with math support
+
+### 🚀 **Quick Start**
+
+```bash
+# Start all services
+docker-compose up -d
+
+# Access the application
+# Frontend: http://localhost:3002
+# Backend API: http://localhost:8000
+# Qdrant: http://localhost:6333
+```
+
+### 🛠️ **Development Setup**
+
+```bash
+# Backend development
+cd backend
+poetry install
+poetry run python -m backend.app.main
+
+# Frontend development
+cd frontend
+npm install
+npm run dev
+```
+
 ### 🚀 Next Steps
 The agent system is ready for integration with the web interface and can handle real-time queries about car manuals, car seats, and other technical documents.
 
