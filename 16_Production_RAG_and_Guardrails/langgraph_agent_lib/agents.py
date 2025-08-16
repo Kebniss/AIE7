@@ -138,7 +138,7 @@ def create_helpful_langgraph_agent(
     
     # Get model and bind tools
     model = get_openai_model(model_name=model_name, temperature=temperature)
-    model_with_tools = model.bind_tools(temperature=temperature)
+    model_with_tools = model.bind_tools(tools)
     
     # Create helpfulness evaluation model (can use same model or different one)
     helpfulness_model = get_openai_model(model_name=model_name, temperature=0.1)
@@ -152,8 +152,16 @@ def create_helpful_langgraph_agent(
     def should_continue(state: AgentState):
         """Route to tools if the last message has tool calls."""
         last_message = state["messages"][-1]
+        
+        # If the last message has tool calls, route to tools
         if getattr(last_message, "tool_calls", None):
             return "action"
+        
+        # If the last message is from a tool (has tool_results), let the agent process it
+        if hasattr(last_message, "tool_results") and last_message.tool_results:
+            return "agent"
+        
+        # Only go to helpfulness check if we have a final agent response
         return "helpfulness_check"
     
     def check_helpfulness(state: AgentState) -> Dict[str, Any]:
@@ -170,7 +178,7 @@ def create_helpful_langgraph_agent(
             if hasattr(msg, 'content') and msg.content:
                 if user_question is None:
                     user_question = msg.content
-                elif agent_response is None and hasattr(msg, 'tool_calls') is False:
+                elif agent_response is None and isinstance(msg, AIMessage) and not getattr(msg, 'tool_calls', []):
                     agent_response = msg.content
         
         # If we can't find the components, just return the current state

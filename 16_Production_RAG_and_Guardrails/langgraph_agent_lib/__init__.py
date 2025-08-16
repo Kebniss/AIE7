@@ -15,5 +15,6 @@ __all__ = [
     "setup_llm_cache",
     "ProductionRAGChain",
     "get_openai_model",
+    "create_helpful_langgraph_agent",
 ]
 
