@@ -68,3 +68,35 @@ def setup_llm_cache(cache_type: str = "memory", cache_path: Optional[str] = None
     else:
         raise ValueError(f"Unsupported cache type: {cache_type}")
 
+def get_cache_size(path: str) -> str:
+    """Get the size of a cache file or directory in a human-readable format.
+    
+    Args:
+        path: Path to the file or directory
+        
+    Returns:
+        Human-readable size string (e.g., "1.23 MB")
+    """
+    total_size = 0
+    if not os.path.exists(path):
+        return "0 B"
+        
+    if os.path.isfile(path):
+        total_size = os.path.getsize(path)
+    elif os.path.isdir(path):
+        for dirpath, dirnames, filenames in os.walk(path):
+            for f in filenames:
+                fp = os.path.join(dirpath, f)
+                if not os.path.islink(fp):
+                    total_size += os.path.getsize(fp)
+
+    # Format size to be human-readable
+    if total_size == 0:
+        return "0 B"
+    size_name = ("B", "KB", "MB", "GB", "TB")
+    import math
+    i = int(math.floor(math.log(total_size, 1024)))
+    p = math.pow(1024, i)
+    s = round(total_size / p, 2)
+    return f"{s} {size_name[i]}"
+

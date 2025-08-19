@@ -16,5 +16,6 @@ __all__ = [
     "ProductionRAGChain",
     "get_openai_model",
     "create_helpful_langgraph_agent",
+    "get_cache_size",
 ]
 

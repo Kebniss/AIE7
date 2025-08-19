@@ -21,6 +21,7 @@ from .rag import ProductionRAGChain
 class AgentState(TypedDict):
     """State schema for agent graphs."""
     messages: Annotated[List[BaseMessage], add_messages]
+    helpfulness_score: Optional[int] = None
 
 
 def create_rag_tool(rag_chain: ProductionRAGChain):
@@ -157,12 +158,13 @@ def create_helpful_langgraph_agent(
         if getattr(last_message, "tool_calls", None):
             return "action"
         
-        # If the last message is from a tool (has tool_results), let the agent process it
-        if hasattr(last_message, "tool_results") and last_message.tool_results:
-            return "agent"
-        
         # Only go to helpfulness check if we have a final agent response
-        return "helpfulness_check"
+        is_agent_response = isinstance(last_message, AIMessage) and not getattr(last_message, 'tool_calls', [])
+        if is_agent_response:
+            return "helpfulness_check"
+        
+        # Otherwise, continue with the agent
+        return "agent"
     
     def check_helpfulness(state: AgentState) -> Dict[str, Any]:
         """
@@ -225,10 +227,10 @@ def create_helpful_langgraph_agent(
             
             Consider using the available tools to gather better information if needed.
             """)
-            return {"messages": [refinement_message]}
+            return {"messages": [refinement_message], "helpfulness_score": score}
         else:
             # Response is helpful enough, end here
-            return {"messages": [AIMessage(content=agent_response)]}
+            return {"messages": [AIMessage(content=agent_response)], "helpfulness_score": score}
     
     def should_refine(state: AgentState):
         """Route based on whether refinement is needed."""
