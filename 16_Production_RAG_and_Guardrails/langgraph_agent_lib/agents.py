@@ -22,6 +22,7 @@ class AgentState(TypedDict):
     """State schema for agent graphs."""
     messages: Annotated[List[BaseMessage], add_messages]
     helpfulness_score: Optional[int] = None
+    max_iterations: Optional[int] = None
 
 
 def create_rag_tool(rag_chain: ProductionRAGChain):
@@ -32,7 +33,13 @@ def create_rag_tool(rag_chain: ProductionRAGChain):
         """Use Retrieval Augmented Generation to retrieve information from the student loan documents."""
         try:
             result = rag_chain.invoke(query)
-            return result.content if hasattr(result, 'content') else str(result)
+            response_content = result.content if hasattr(result, 'content') else str(result)
+            
+            # If RAG returns "I don't know", instruct the agent to use a search engine
+            if "i don't know" in response_content.lower():
+                return "The information was not found in the provided documents. Please use a search engine to find the answer."
+            
+            return response_content
         except Exception as e:
             return f"Error retrieving information: {str(e)}"
     
@@ -124,6 +131,7 @@ def create_helpful_langgraph_agent(
     
     This agent adds a helpfulness check node that evaluates whether the response
     adequately addresses the user's query and allows the agent to refine it if necessary.
+    The agent will attempt up to 3 refinements before giving up.
     
     Args:
         model_name: OpenAI model name
@@ -175,13 +183,18 @@ def create_helpful_langgraph_agent(
         # Get the user's original question and the agent's response
         user_question = None
         agent_response = None
+
+        # The user question is the first message
+        if messages:
+            user_question = messages[0].content
         
-        for msg in messages:
-            if hasattr(msg, 'content') and msg.content:
-                if user_question is None:
-                    user_question = msg.content
-                elif agent_response is None and isinstance(msg, AIMessage) and not getattr(msg, 'tool_calls', []):
+        # The agent response is the last AI message
+        for msg in reversed(messages):
+            if isinstance(msg, AIMessage) and not getattr(msg, 'tool_calls', []):
+                # Ensure it's not a refinement message
+                if "not helpful enough" not in msg.content:
                     agent_response = msg.content
+                    break
         
         # If we can't find the components, just return the current state
         if not user_question or not agent_response:
@@ -227,18 +240,29 @@ def create_helpful_langgraph_agent(
             
             Consider using the available tools to gather better information if needed.
             """)
-            return {"messages": [refinement_message], "helpfulness_score": score}
+            # Increment iteration counter
+            current_iterations = state.get("max_iterations", 0)
+            return {"messages": [refinement_message], "helpfulness_score": score, "max_iterations": current_iterations + 1}
         else:
-            # Response is helpful enough, end here
-            return {"messages": [AIMessage(content=agent_response)], "helpfulness_score": score}
+            # Response is helpful enough, don't add any new messages
+            # The original agent response will remain as the final output
+            return {"helpfulness_score": score}
     
     def should_refine(state: AgentState):
-        """Route based on whether refinement is needed."""
+        """Route based on whether refinement is needed and iteration limit."""
         last_message = state["messages"][-1]
         
         # Check if this is a refinement instruction
         if hasattr(last_message, 'content') and "not helpful enough" in last_message.content:
-            return "agent"  # Route back to agent for refinement
+            # Check iteration limit
+            current_iterations = state.get("max_iterations", 0)
+            if current_iterations >= 3:
+                # Max iterations reached, end with a message
+                final_message = AIMessage(content="I've reached the maximum number of refinement attempts. I apologize, but I'm unable to provide a more helpful response at this time.")
+                return END
+            else:
+                # Increment iteration counter and continue
+                return "agent"  # Route back to agent for refinement
         else:
             return END  # End the conversation
     
