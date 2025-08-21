@@ -117,5 +117,56 @@ def agent_node(state: AgentState):
     return {"messages": [response]}
 
 
-# --- We will add Step 3 (Assemble the Graph) and Step 4 (Runner) below this line ---
+# --- Step 3: Assemble the Graph ---
+
+# Define the tool node. This is a pre-built node from LangGraph that executes
+# the tools our agent decides to call.
+tool_node = ToolNode([call_a2a_agent])
+
+
+def should_continue(state: AgentState):
+    """
+    This is a routing function. It determines whether the agent should continue
+    by calling a tool, or if it should finish the conversation.
+    """
+    last_message = state["messages"][-1]
+    # If the last message is not an AIMessage or has no tool calls, we end
+    if not isinstance(last_message, AIMessage) or not last_message.tool_calls:
+        return "end"
+    # Otherwise, we continue by calling the tool
+    return "continue"
+
+
+# Create a new StateGraph with our AgentState
+workflow = StateGraph(AgentState)
+
+# Add the agent node and the tool node to the graph
+workflow.add_node("agent", agent_node)
+workflow.add_node("action", tool_node)
+
+# Set the entry point of the graph to the agent node
+workflow.set_entry_point("agent")
+
+# Add the conditional edge. This is the core logic of the graph.
+# After the 'agent' node, it checks the 'should_continue' function.
+# If it returns 'continue', it routes to the 'action' node.
+# If it returns 'end', it finishes the graph.
+workflow.add_conditional_edges(
+    "agent",
+    should_continue,
+    {
+        "continue": "action",
+        "end": END,
+    },
+)
+
+# Add a normal edge from the action node back to the agent node.
+# This means after a tool is called, the result is passed back to the agent
+# so it can decide what to do next (e.g., respond to the user).
+workflow.add_edge("action", "agent")
+
+# Compile the graph into a runnable application
+app = workflow.compile()
+
+# --- We will add Step 4 (Runner) below this line ---
 
