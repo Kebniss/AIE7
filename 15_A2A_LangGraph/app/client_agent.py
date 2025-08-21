@@ -1,12 +1,16 @@
 import asyncio
 import logging
-from typing import Any
+from typing import Any, List, TypedDict
 from uuid import uuid4
 
 import httpx
 from a2a.client import A2ACardResolver, A2AClient
 from a2a.types import MessageSendParams, SendMessageRequest
 from langchain_core.tools import tool
+from langchain_core.messages import AIMessage, BaseMessage, HumanMessage
+from langchain_openai import ChatOpenAI
+from langgraph.graph import END, StateGraph
+from langgraph.prebuilt import ToolNode
 
 # Configure logging
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
@@ -85,23 +89,33 @@ def call_a2a_agent(query: str) -> str:
     # LangGraph tools are typically synchronous, so this makes it compatible.
     return asyncio.run(_call_a2a_agent_async(query))
 
-# --- We will add Step 2 (LangGraph Structure) and the rest of the implementation below this line ---
+# --- Step 2: Define the LangGraph Structure ---
 
-# --- Temporary Test Runner ---
-if __name__ == "__main__":
-    print("--- Testing A2A Agent Tool ---")
-    # Make sure the main A2A server is running before executing this.
-    # You can run it with `uv run python -m app`
-    
-    # query = "What are the latest developments in AI?"
-    query = "Find me recent papers on transformer architectures"
-    
-    print(f"\nSending test query: '{query}'")
-    
-    # Call the tool directly
-    response = call_a2a_agent(query)
-    
-    print("\n--- Response from A2A Agent ---")
-    print(response)
-    print("\n---------------------------------")
+
+# The state for our graph is a list of messages
+class AgentState(TypedDict):
+    messages: List[BaseMessage]
+
+
+# Initialize the LLM we want to use
+# For this client agent, we can use a simple, fast model
+llm = ChatOpenAI(model="gpt-4o-mini", temperature=0)
+
+# Bind our A2A tool to the LLM
+# This tells the LLM that it has access to this tool
+llm_with_tools = llm.bind_tools([call_a2a_agent])
+
+
+def agent_node(state: AgentState):
+    """
+    The primary node for our client agent.
+    It invokes the LLM with the current state of the conversation and the available tools.
+    The LLM's response, which could be a direct answer or a request to use a tool, is
+    then returned to be added to the state.
+    """
+    response = llm_with_tools.invoke(state["messages"])
+    return {"messages": [response]}
+
+
+# --- We will add Step 3 (Assemble the Graph) and Step 4 (Runner) below this line ---
 
