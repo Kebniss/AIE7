@@ -1,16 +1,17 @@
 import asyncio
 import logging
-from typing import Any, List, TypedDict
+from typing import Any, List, TypedDict, Annotated
 from uuid import uuid4
 
 import httpx
 from a2a.client import A2ACardResolver, A2AClient
 from a2a.types import MessageSendParams, SendMessageRequest
 from langchain_core.tools import tool
-from langchain_core.messages import AIMessage, BaseMessage, HumanMessage
+from langchain_core.messages import AIMessage, BaseMessage, HumanMessage, ToolMessage
 from langchain_openai import ChatOpenAI
 from langgraph.graph import END, StateGraph
 from langgraph.prebuilt import ToolNode
+from langgraph.graph.message import add_messages
 
 # Configure logging
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
@@ -56,20 +57,17 @@ async def _call_a2a_agent_async(query: str) -> str:
             response = await client.send_message(request)
             logger.info("Received response from A2A server.")
 
-            # 5. Extract the final text response from the complex response object
-            # The correct path to the text is result -> artifacts -> parts -> text
-            if (
-                response.root
-                and response.root.result
-                and response.root.result.artifacts
-                and response.root.result.artifacts[0].parts
-            ):
-                final_text = response.root.result.artifacts[0].parts[0].text
+            # 5. Extract the final text response by parsing the dictionary representation
+            # This is more robust than relying on the Pydantic model's attributes directly
+            try:
+                response_dict = response.model_dump()
+                final_text = response_dict["result"]["artifacts"][0]["parts"][0]["text"]
                 logger.info(f"Successfully extracted response: '{final_text}'")
                 return final_text
-
-            logger.warning("Could not extract a valid text response from the server's reply.")
-            return "Error: Could not parse a valid response from the agent."
+            except (KeyError, IndexError, TypeError) as e:
+                logger.warning(f"Could not extract valid text from response. Error: {e}")
+                logger.debug(f"Full response for debugging:\n{response.model_dump_json(indent=2)}")
+                return "Error: Could not parse a valid response from the agent."
 
     except httpx.ConnectError as e:
         logger.error(f"Connection to A2A server failed. Is the server running? Error: {e}")
@@ -94,7 +92,7 @@ def call_a2a_agent(query: str) -> str:
 
 # The state for our graph is a list of messages
 class AgentState(TypedDict):
-    messages: List[BaseMessage]
+    messages: Annotated[List[BaseMessage], add_messages]
 
 
 # Initialize the LLM we want to use
@@ -113,7 +111,12 @@ def agent_node(state: AgentState):
     The LLM's response, which could be a direct answer or a request to use a tool, is
     then returned to be added to the state.
     """
+    print("\n---AGENT NODE---")
+    print(f"MESSAGES: {state['messages']}")
     response = llm_with_tools.invoke(state["messages"])
+    print(f"LLM RESPONSE: {response}")
+    print("---END AGENT NODE---\n")
+    # We return a list, because state updates are additive
     return {"messages": [response]}
 
 
@@ -129,12 +132,16 @@ def should_continue(state: AgentState):
     This is a routing function. It determines whether the agent should continue
     by calling a tool, or if it should finish the conversation.
     """
+    print("\n---SHOULD CONTINUE---")
     last_message = state["messages"][-1]
-    # If the last message is not an AIMessage or has no tool calls, we end
-    if not isinstance(last_message, AIMessage) or not last_message.tool_calls:
-        return "end"
-    # Otherwise, we continue by calling the tool
-    return "continue"
+    print(f"LAST MESSAGE: {last_message}")
+    if getattr(last_message, "tool_calls", None):
+        print("DECISION: Continue to action node")
+        print("---END SHOULD CONTINUE---\n")
+        return "continue"
+    print("DECISION: End conversation")
+    print("---END SHOULD CONTINUE---\n")
+    return "end"
 
 
 # Create a new StateGraph with our AgentState
@@ -168,5 +175,38 @@ workflow.add_edge("action", "agent")
 # Compile the graph into a runnable application
 app = workflow.compile()
 
-# --- We will add Step 4 (Runner) below this line ---
+# --- Step 4: Add the Runner ---
+if __name__ == "__main__":
+    print("--- Client Agent Runner ---")
+    print("Starting a conversation with the client agent...")
+    
+    # Ensure the main A2A server is running in a separate terminal
+    # You can run it with `uv run python -m app`
+
+    # Define the initial user query
+    inputs = {"messages": [HumanMessage(content="Find me recent papers on transformer architectures")]}
+
+    # Stream the results from the compiled graph
+    print(f"\nUser Query: {inputs['messages'][0].content}")
+    print("\nStreaming response from the agent...")
+    print("-" * 30)
+
+    final_response = None
+    for output in app.stream(inputs):
+        # The stream returns the full state at each step.
+        # We're interested in the last message added to the state.
+        for key, value in output.items():
+            if key == "__end__":
+                continue
+            last_message = value["messages"][-1]
+            if isinstance(last_message, AIMessage) and last_message.tool_calls:
+                # This is a tool call, we can log it if we want
+                print(f"Agent is calling tool: {last_message.tool_calls[0]['name']}")
+            else:
+                # This is the final response
+                final_response = last_message.content
+                print(f"Final Response: {final_response}")
+
+    print("-" * 30)
+    print("Conversation finished.")
 
